@@ -1,0 +1,111 @@
+#!/bin/sh
+#
+# /etc/init.d/elasticsearch -- startup script for Elasticsearch
+
+### BEGIN INIT INFO
+# Provides:          elasticsearch
+# Required-Start:    $network $remote_fs $named
+# Required-Stop:     $network $remote_fs $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Starts elasticsearch
+# Description:       Starts elasticsearch
+### END INIT INFO
+
+# Run Elasticsearch as this user ID and group ID
+ES_USER=root
+ES_GROUP=root
+
+if [ $(whoami) != "$ES_USER" ]; then
+    sudo -u $ES_USER $0 $@
+    exit 0
+fi
+#if [ `id -u` -eq 0 ]; then
+#    echo "OOPS! root should not be here"
+#    exit 1
+#fi
+
+
+if [ -r /etc/init.d/functions ]; then
+    . /etc/init.d/functions
+fi
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+NAME=elasticsearch
+DESC="Elasticsearch Server"
+PID_FILE=/var/run/elasticsearch/$NAME.pid
+
+ES_HOME=/opt/$NAME/default
+DAEMON=$ES_HOME/bin/elasticsearch
+DAEMON_OPTS=""
+
+# The first existing directory is used for JAVA_HOME (if JAVA_HOME is not defined in $DEFAULT)
+JDK_DIRS="/usr/lib/jvm/jdk-7-oracle-x64 /usr/lib/jvm/java-7-oracle /usr/lib/jvm/java-7-openjdk /usr/lib/jvm/java-7-openjdk-amd64/ /usr/lib/jvm/java-7-openjdk-armhf /usr/lib/jvm/java-7-openjdk-i386/ /usr/lib/jvm/default-java /opt/java/default"
+
+# Look for the right JVM to use
+for jdir in $JDK_DIRS; do
+    if [ -r "$jdir/bin/java" -a -z "${JAVA_HOME}" ]; then
+        JAVA_HOME="$jdir"
+    fi
+done
+export JAVA_HOME
+
+
+if [ -x "$JAVA_HOME/bin/java" ]; then
+    JAVA="$JAVA_HOME/bin/java"
+else
+    JAVA=`which java`
+fi
+
+if [ ! -x "$JAVA" ]; then
+    echo "Could not find any executable java binary. Please install java in your PATH or set JAVA_HOME"
+    exit 1
+fi
+
+
+# Check DAEMON exists
+test -x $DAEMON || exit 0
+
+
+case "$1" in
+  start)
+
+    echo "Starting $DESC"
+
+    pid=`ps -elf | grep "bin/elasticsearch" | grep -v "grep"`
+    if [ -n "$pid" ] ; then
+	echo "ES already running as: $pid"
+	exit 1
+    fi
+
+    # Start Daemon
+    echo "Starting ES Server ..."
+    sudo $DAEMON $DAEMON_OPTS &
+    echo "ES Server started"
+#	curl -X GET 'http://localhost:9200'
+    ;;		
+  stop)
+    echo "Stopping $DESC ..."
+    ps -elf | grep "bin/elasticsearch" | grep -v grep | awk '{print $4}' | xargs sudo kill -9
+    sleep 3
+    echo "ES Server stopped"
+
+#	curl -X POST 'http://localhost:9200/_cluster/nodes/_local/_shutdown'
+    ;;
+  restart|force-reload)
+    if [ -f "$PID_FILE" ]; then
+	$0 stop
+	sleep 3
+    fi
+    $0 start
+    ;;
+  status)
+	curl -X GET 'http://localhost:9200'
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|force-reload|status}"
+    exit 1
+    ;;
+esac
+
+exit 0
